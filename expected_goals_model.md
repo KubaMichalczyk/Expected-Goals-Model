@@ -1520,6 +1520,8 @@ rmse_all[which.min(rmse_all)]
     ##    pred65 
     ## 0.3292909
 
-We get the lowest test error while cutting off on 0.65, however the plot implies that other cut-off level, as long as greater than 0.4) would give similar error. *pitch\_plot is a slightly modified version of a function shared by @FC\_rstats.*
+We get the lowest test error while cutting off on 0.65, however the plot implies that other cut-off level, as long as greater than 0.4) would give similar error. 
+
+*pitch\_plot is a slightly modified version of a function shared by @FC\_rstats.*
 
 **This article was written with the aid of StrataData, which is property of [Stratagem Technologies](www.stratagem.co). StrataData powers the [StrataBet Sports Trading Platform](https://app.stratabet.com), in addition to [StrataBet Premium Recommendations](https://stratatips.co).**
