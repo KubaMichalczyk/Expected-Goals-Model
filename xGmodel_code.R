@@ -230,7 +230,6 @@ library(Epi)
 
 summary(glm(goal ~ type, family = 'binomial', data = chances_train)) #+
 summary(glm(goal ~ bodyPart, family = 'binomial', data = chances_train)) #+
-summary(glm(goal ~ shotQuality, family = 'binomial', data = chances_train)) #+
 summary(glm(goal ~ defPressure, family = 'binomial', data = chances_train)) #+
 summary(glm(goal ~ numDefPlayers, family = 'binomial', data = chances_train)) #+
 summary(glm(goal ~ numAttPlayers, family = 'binomial', data = chances_train)) #+
@@ -269,12 +268,12 @@ chances_test <- chances_test %>% mutate(type_of_attack = fct_collapse(type_of_at
                                                                       'Free Kick' = c('Foot_Free Kick', 'Head_Free Kick', 
                                                                                       'Other_Free Kick')))
 
-model2 <- glm(goal ~ shotQuality + defPressure + numDefPlayers + numAttPlayers + dist + angle + 
+model2 <- glm(goal ~ defPressure + numDefPlayers + numAttPlayers + dist + angle + 
                 game_state + type_of_attack, 
               family = 'binomial', data = chances_train)
 summary(model2)
 
-model2a <- glm(goal ~ shotQuality + defPressure + numDefPlayers + dist + angle +
+model2a <- glm(goal ~ defPressure + numDefPlayers + dist + angle +
                  game_state + type_of_attack, family = 'binomial', data = chances_train)
 summary(model2a)
 lrtest(model2a, model2)
@@ -325,17 +324,19 @@ summary(spline_angle5)$aic
 summary(spline_angle6)$aic
 summary(spline_angle7)$aic
 
-model4 <- glm(goal ~ shotQuality + defPressure + numDefPlayers + rcs(dist, parms = 5)  + 
+model4 <- glm(goal ~ defPressure + numDefPlayers + rcs(dist, parms = 5)  + 
                 rcs(angle, parms = 6) + game_state + type_of_attack, 
               family = 'binomial', data = chances_train)
 summary(model4)
 
-model4a <- glm(goal ~ shotQuality + defPressure + numDefPlayers + rcs(dist, parms = 5) + game_state +                      type_of_attack, family = 'binomial', data = chances_train)
+model4a <- glm(goal ~ defPressure + numDefPlayers + rcs(dist, parms = 5) + game_state +
+                 type_of_attack, family = 'binomial', data = chances_train)
+
 lrtest(model4a, model4)
 (model4a$coefficients - model4$coefficients[names(model4a$coefficients)])/
   model4$coefficients[names(model4a$coefficients)] * 100
 
-ROC(form = goal ~ shotQuality + defPressure + numDefPlayers + rcs(dist, parms = 5)  + 
+ROC(form = goal ~ defPressure + numDefPlayers + rcs(dist, parms = 5)  + 
       rcs(angle, parms = 6) + game_state + type_of_attack, 
     family = 'binomial', data = chances_test, plot = 'ROC')
 
@@ -350,3 +351,6 @@ rmse_all <- map(1:100, ~ chances_test %>%
   bind_cols(.) %>% map_dbl(rmse, y = chances_test$goal)
 ggplot() + geom_line(aes(seq(0.01, 1, by = 0.01), rmse_all))
 rmse_all[which.min(rmse_all)]
+
+xGmodel <- model4
+save(xGmodel, file = "xGmodel.rda")
