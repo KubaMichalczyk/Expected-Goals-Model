@@ -189,10 +189,16 @@ chances <- chances %>% filter(!id %in% penalties2$id)
 ...and some inconcistencies in inputted values - let's fix them as well.
 
 ``` r
-plt <- image_graph(width = 600, height = 450, res = 72)
-chances %>% ggplot() + geom_bar(aes(type)) + coord_flip()
-invisible(dev.off())
-plt %>% image_composite(logo, offset = "+470+385")
+chances <- chances %>% 
+  mutate(chanceRating = case_when(
+    str_detect(chanceRating, '[Ss]uperb') ~ 'Superb',
+    str_detect(chanceRating, '[Gg]reat') ~ 'Great',
+    str_detect(chanceRating, '[Vv]ery[ ]*[Gg]ood*') ~ 'Very good',
+    str_detect(chanceRating, '^[Gg]ood') ~ 'Good',
+    str_detect(chanceRating, '[Ff]airly') ~ 'Fairly good',
+    str_detect(chanceRating, '[Pp]oor') ~ 'Poor'
+    )
+  )
 ```
 
 <img src="expected_goals_model_files/figure-markdown_github/unnamed-chunk-10-1.png" style="display: block; margin: auto;" />
@@ -459,37 +465,6 @@ summary(glm(goal ~ bodyPart, family = 'binomial', data = chances_train)) #+
     ## AIC: 32154
     ## 
     ## Number of Fisher Scoring iterations: 4
-
-``` r
-summary(glm(goal ~ shotQuality, family = 'binomial', data = chances_train)) #+
-```
-
-    ## 
-    ## Call:
-    ## glm(formula = goal ~ shotQuality, family = "binomial", data = chances_train)
-    ## 
-    ## Deviance Residuals: 
-    ##     Min       1Q   Median       3Q      Max  
-    ## -2.5601  -0.2143  -0.2143  -0.0695   3.4716  
-    ## 
-    ## Coefficients:
-    ##              Estimate Std. Error z value Pr(>|z|)    
-    ## (Intercept)   -1.4046     0.1519  -9.249  < 2e-16 ***
-    ## shotQuality1  -4.6188     0.2292 -20.151  < 2e-16 ***
-    ## shotQuality2  -2.3579     0.1616 -14.592  < 2e-16 ***
-    ## shotQuality3   0.5550     0.1532   3.622 0.000292 ***
-    ## shotQuality4   1.9479     0.1591  12.244  < 2e-16 ***
-    ## shotQuality5   4.6433     0.3564  13.030  < 2e-16 ***
-    ## ---
-    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-    ## 
-    ## (Dispersion parameter for binomial family taken to be 1)
-    ## 
-    ##     Null deviance: 32235  on 42855  degrees of freedom
-    ## Residual deviance: 20630  on 42850  degrees of freedom
-    ## AIC: 20642
-    ## 
-    ## Number of Fisher Scoring iterations: 8
 
 ``` r
 summary(glm(goal ~ defPressure, family = 'binomial', data = chances_train)) #+
@@ -935,7 +910,7 @@ chances_test <- chances_test %>% mutate(type_of_attack = fct_collapse(type_of_at
 In the second step we build a model with all variables selected in step 1. Then we check which covariates are insignificant and if removing them will make a difference.
 
 ``` r
-model2 <- glm(goal ~ shotQuality + defPressure + numDefPlayers +
+model2 <- glm(goal ~ defPressure + numDefPlayers +
               numAttPlayers + dist + angle + game_state + type_of_attack, 
               family = 'binomial', data = chances_train)
 summary(model2)
@@ -943,69 +918,59 @@ summary(model2)
 
     ## 
     ## Call:
-    ## glm(formula = goal ~ shotQuality + defPressure + numDefPlayers + 
-    ##     numAttPlayers + dist + angle + game_state + type_of_attack, 
-    ##     family = "binomial", data = chances_train)
+    ## glm(formula = goal ~ defPressure + numDefPlayers + numAttPlayers + 
+    ##     dist + angle + game_state + type_of_attack, family = "binomial", 
+    ##     data = chances_train)
     ## 
     ## Deviance Residuals: 
     ##     Min       1Q   Median       3Q      Max  
-    ## -3.1816  -0.2344  -0.0774  -0.0235   4.4065  
+    ## -2.3962  -0.4997  -0.3346  -0.2129   4.0248  
     ## 
     ## Coefficients:
     ##                                     Estimate Std. Error z value Pr(>|z|)
-    ## (Intercept)                          4.45259    0.28191  15.794  < 2e-16
-    ## shotQuality1                        -4.52922    0.26763 -16.923  < 2e-16
-    ## shotQuality2                        -2.02597    0.20442  -9.911  < 2e-16
-    ## shotQuality3                         0.91353    0.19757   4.624 3.77e-06
-    ## shotQuality4                         3.46441    0.20732  16.710  < 2e-16
-    ## shotQuality5                         7.53514    0.42554  17.707  < 2e-16
-    ## defPressure1                         0.10029    0.07078   1.417  0.15647
-    ## defPressure2                        -0.02062    0.07177  -0.287  0.77386
-    ## defPressure3                        -0.16874    0.07240  -2.331  0.01977
-    ## defPressure4                        -0.61102    0.08908  -6.859 6.94e-12
-    ## defPressure5                        -1.02560    0.20853  -4.918 8.73e-07
-    ## numDefPlayers1                      -2.27047    0.18694 -12.146  < 2e-16
-    ## numDefPlayers2                      -3.00841    0.18971 -15.858  < 2e-16
-    ## numDefPlayers3                      -3.12520    0.19574 -15.966  < 2e-16
-    ## numDefPlayers4                      -3.33263    0.21278 -15.662  < 2e-16
-    ## numDefPlayers5                      -3.18765    0.24555 -12.982  < 2e-16
-    ## numDefPlayers6                      -3.27560    0.29701 -11.029  < 2e-16
-    ## numDefPlayers7                      -3.11525    0.34103  -9.135  < 2e-16
-    ## numDefPlayers8                      -3.93836    0.50565  -7.789 6.77e-15
-    ## numDefPlayers9                      -4.84738    1.05206  -4.608 4.07e-06
-    ## numDefPlayers10                     -4.03878    1.42752  -2.829  0.00467
-    ## numDefPlayers11                    -14.96053  126.60548  -0.118  0.90594
-    ## numAttPlayers1                      -0.13922    0.07315  -1.903  0.05703
-    ## numAttPlayers2                      -0.14469    0.15569  -0.929  0.35270
-    ## numAttPlayers3                      -0.11297    0.27377  -0.413  0.67986
-    ## numAttPlayers4                      -0.17879    0.53065  -0.337  0.73617
-    ## numAttPlayers>4                      0.61796    1.06710   0.579  0.56252
-    ## dist                               -22.06551    0.57207 -38.571  < 2e-16
-    ## angle                               -1.12045    0.10196 -10.989  < 2e-16
-    ## game_state                           0.09261    0.06223   1.488  0.13668
-    ## type_of_attackOther not assisted    -0.22132    0.07052  -3.138  0.00170
-    ## type_of_attackDirect Free-Kick       0.74213    0.18594   3.991 6.58e-05
-    ## type_of_attackHead_Cross High       -1.03176    0.08186 -12.604  < 2e-16
-    ## type_of_attackCorner                -0.82544    0.09657  -8.547  < 2e-16
-    ## type_of_attackRebound                0.66626    0.11093   6.006 1.90e-09
-    ## type_of_attackFoot_Cross High       -0.50793    0.11016  -4.611 4.01e-06
-    ## type_of_attackFree Kick             -0.60179    0.11388  -5.284 1.26e-07
-    ## type_of_attackFoot_Cross Low        -0.09806    0.07928  -1.237  0.21616
-    ## type_of_attackOther_Cross Low        0.32366    0.77550   0.417  0.67641
-    ## type_of_attackHead_Open Play Pass   -0.43939    0.18588  -2.364  0.01809
-    ## type_of_attackOther_Cross High       1.67510    0.57746   2.901  0.00372
-    ## type_of_attackHead_Cross Low        -0.48560    0.39952  -1.215  0.22419
-    ## type_of_attackOther_Open Play Pass   1.34700    0.71410   1.886  0.05925
+    ## (Intercept)                          3.06104    0.13829  22.135  < 2e-16
+    ## defPressure1                        -0.04864    0.05278  -0.922 0.356762
+    ## defPressure2                        -0.21426    0.05411  -3.960 7.50e-05
+    ## defPressure3                        -0.36343    0.05511  -6.595 4.26e-11
+    ## defPressure4                        -0.90041    0.06913 -13.024  < 2e-16
+    ## defPressure5                        -1.79213    0.17180 -10.432  < 2e-16
+    ## numDefPlayers1                      -1.53527    0.12555 -12.228  < 2e-16
+    ## numDefPlayers2                      -2.12854    0.12792 -16.639  < 2e-16
+    ## numDefPlayers3                      -2.25854    0.13328 -16.946  < 2e-16
+    ## numDefPlayers4                      -2.46762    0.14853 -16.614  < 2e-16
+    ## numDefPlayers5                      -2.28681    0.17368 -13.167  < 2e-16
+    ## numDefPlayers6                      -2.42253    0.21441 -11.298  < 2e-16
+    ## numDefPlayers7                      -2.26076    0.24610  -9.186  < 2e-16
+    ## numDefPlayers8                      -2.53569    0.33226  -7.632 2.32e-14
+    ## numDefPlayers9                      -2.81152    0.57554  -4.885 1.03e-06
+    ## numDefPlayers10                     -2.49248    0.80063  -3.113 0.001851
+    ## numDefPlayers11                    -11.41648   83.91391  -0.136 0.891782
+    ## numAttPlayers1                      -0.15189    0.05672  -2.678 0.007412
+    ## numAttPlayers2                      -0.14744    0.11562  -1.275 0.202223
+    ## numAttPlayers3                      -0.03420    0.19111  -0.179 0.857971
+    ## numAttPlayers4                      -0.03123    0.37357  -0.084 0.933367
+    ## numAttPlayers>4                     -0.02743    0.79250  -0.035 0.972392
+    ## dist                               -16.21958    0.41157 -39.409  < 2e-16
+    ## angle                               -0.93248    0.07852 -11.875  < 2e-16
+    ## game_state                           0.09046    0.04806   1.882 0.059833
+    ## type_of_attackOther not assisted    -0.19490    0.05543  -3.516 0.000438
+    ## type_of_attackDirect Free-Kick       0.83431    0.13796   6.048 1.47e-09
+    ## type_of_attackHead_Cross High       -1.01517    0.06165 -16.466  < 2e-16
+    ## type_of_attackCorner                -0.93145    0.07493 -12.431  < 2e-16
+    ## type_of_attackRebound                0.42499    0.08167   5.204 1.96e-07
+    ## type_of_attackFoot_Cross High       -0.53337    0.08170  -6.529 6.64e-11
+    ## type_of_attackFree Kick             -0.81308    0.08651  -9.399  < 2e-16
+    ## type_of_attackFoot_Cross Low        -0.17935    0.05967  -3.006 0.002651
+    ## type_of_attackOther_Cross Low       -0.38072    0.56493  -0.674 0.500356
+    ## type_of_attackHead_Open Play Pass   -0.55912    0.13652  -4.095 4.21e-05
+    ## type_of_attackOther_Cross High      -0.79386    0.42933  -1.849 0.064450
+    ## type_of_attackHead_Cross Low        -0.28517    0.29517  -0.966 0.333981
+    ## type_of_attackOther_Open Play Pass   0.34274    0.54742   0.626 0.531245
     ##                                       
     ## (Intercept)                        ***
-    ## shotQuality1                       ***
-    ## shotQuality2                       ***
-    ## shotQuality3                       ***
-    ## shotQuality4                       ***
-    ## shotQuality5                       ***
     ## defPressure1                          
-    ## defPressure2                          
-    ## defPressure3                       *  
+    ## defPressure2                       ***
+    ## defPressure3                       ***
     ## defPressure4                       ***
     ## defPressure5                       ***
     ## numDefPlayers1                     ***
@@ -1019,106 +984,95 @@ summary(model2)
     ## numDefPlayers9                     ***
     ## numDefPlayers10                    ** 
     ## numDefPlayers11                       
-    ## numAttPlayers1                     .  
+    ## numAttPlayers1                     ** 
     ## numAttPlayers2                        
     ## numAttPlayers3                        
     ## numAttPlayers4                        
     ## numAttPlayers>4                       
     ## dist                               ***
     ## angle                              ***
-    ## game_state                            
-    ## type_of_attackOther not assisted   ** 
+    ## game_state                         .  
+    ## type_of_attackOther not assisted   ***
     ## type_of_attackDirect Free-Kick     ***
     ## type_of_attackHead_Cross High      ***
     ## type_of_attackCorner               ***
     ## type_of_attackRebound              ***
     ## type_of_attackFoot_Cross High      ***
     ## type_of_attackFree Kick            ***
-    ## type_of_attackFoot_Cross Low          
+    ## type_of_attackFoot_Cross Low       ** 
     ## type_of_attackOther_Cross Low         
-    ## type_of_attackHead_Open Play Pass  *  
-    ## type_of_attackOther_Cross High     ** 
+    ## type_of_attackHead_Open Play Pass  ***
+    ## type_of_attackOther_Cross High     .  
     ## type_of_attackHead_Cross Low          
-    ## type_of_attackOther_Open Play Pass .  
+    ## type_of_attackOther_Open Play Pass    
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
     ## 
     ## (Dispersion parameter for binomial family taken to be 1)
     ## 
     ##     Null deviance: 32235  on 42855  degrees of freedom
-    ## Residual deviance: 14769  on 42813  degrees of freedom
-    ## AIC: 14855
+    ## Residual deviance: 26066  on 42818  degrees of freedom
+    ## AIC: 26142
     ## 
-    ## Number of Fisher Scoring iterations: 10
+    ## Number of Fisher Scoring iterations: 9
 
-numAttPlayers is a variable without at least one significant level coefficient. So let's see how removing it will impact the model.
+numAttPlayers is a variable with only one significant level coefficient. So let's see how removing it will impact the model.
 
 ``` r
-model2a <- glm(goal ~ shotQuality + defPressure + numDefPlayers + dist + angle +
+model2a <- glm(goal ~ defPressure + numDefPlayers + dist + angle +
                  game_state + type_of_attack, family = 'binomial', data = chances_train)
 summary(model2a)
 ```
 
     ## 
     ## Call:
-    ## glm(formula = goal ~ shotQuality + defPressure + numDefPlayers + 
-    ##     dist + angle + game_state + type_of_attack, family = "binomial", 
-    ##     data = chances_train)
+    ## glm(formula = goal ~ defPressure + numDefPlayers + dist + angle + 
+    ##     game_state + type_of_attack, family = "binomial", data = chances_train)
     ## 
     ## Deviance Residuals: 
     ##     Min       1Q   Median       3Q      Max  
-    ## -3.1966  -0.2345  -0.0773  -0.0236   4.4137  
+    ## -2.4245  -0.4993  -0.3348  -0.2133   4.0346  
     ## 
     ## Coefficients:
     ##                                     Estimate Std. Error z value Pr(>|z|)
-    ## (Intercept)                          4.44189    0.28165  15.771  < 2e-16
-    ## shotQuality1                        -4.52426    0.26740 -16.919  < 2e-16
-    ## shotQuality2                        -2.02349    0.20418  -9.910  < 2e-16
-    ## shotQuality3                         0.91682    0.19732   4.646 3.38e-06
-    ## shotQuality4                         3.46741    0.20707  16.745  < 2e-16
-    ## shotQuality5                         7.53045    0.42609  17.673  < 2e-16
-    ## defPressure1                         0.10378    0.07068   1.468  0.14203
-    ## defPressure2                        -0.01523    0.07165  -0.213  0.83161
-    ## defPressure3                        -0.15923    0.07217  -2.206  0.02735
-    ## defPressure4                        -0.59865    0.08879  -6.743 1.56e-11
-    ## defPressure5                        -1.00967    0.20845  -4.844 1.27e-06
-    ## numDefPlayers1                      -2.26858    0.18686 -12.141  < 2e-16
-    ## numDefPlayers2                      -3.01561    0.18958 -15.907  < 2e-16
-    ## numDefPlayers3                      -3.16104    0.19484 -16.223  < 2e-16
-    ## numDefPlayers4                      -3.39916    0.21010 -16.179  < 2e-16
-    ## numDefPlayers5                      -3.27696    0.23952 -13.682  < 2e-16
-    ## numDefPlayers6                      -3.38375    0.28680 -11.798  < 2e-16
-    ## numDefPlayers7                      -3.22840    0.31760 -10.165  < 2e-16
-    ## numDefPlayers8                      -4.04524    0.48747  -8.299  < 2e-16
-    ## numDefPlayers9                      -4.95476    1.02950  -4.813 1.49e-06
-    ## numDefPlayers10                     -4.06301    1.44667  -2.809  0.00498
-    ## numDefPlayers11                    -15.09847  126.60024  -0.119  0.90507
-    ## dist                               -22.10161    0.57077 -38.723  < 2e-16
-    ## angle                               -1.10869    0.10177 -10.894  < 2e-16
-    ## game_state                           0.09273    0.06221   1.491  0.13607
-    ## type_of_attackOther not assisted    -0.22333    0.07050  -3.168  0.00154
-    ## type_of_attackDirect Free-Kick       0.74404    0.18599   4.000 6.33e-05
-    ## type_of_attackHead_Cross High       -1.03210    0.08181 -12.615  < 2e-16
-    ## type_of_attackCorner                -0.84372    0.09603  -8.786  < 2e-16
-    ## type_of_attackRebound                0.65942    0.11082   5.950 2.68e-09
-    ## type_of_attackFoot_Cross High       -0.51095    0.11008  -4.642 3.46e-06
-    ## type_of_attackFree Kick             -0.61390    0.11364  -5.402 6.58e-08
-    ## type_of_attackFoot_Cross Low        -0.10239    0.07920  -1.293  0.19609
-    ## type_of_attackOther_Cross Low        0.32362    0.77524   0.417  0.67635
-    ## type_of_attackHead_Open Play Pass   -0.45487    0.18570  -2.449  0.01431
-    ## type_of_attackOther_Cross High       1.67444    0.57706   2.902  0.00371
-    ## type_of_attackHead_Cross Low        -0.48444    0.40014  -1.211  0.22602
-    ## type_of_attackOther_Open Play Pass   1.34822    0.71280   1.891  0.05856
+    ## (Intercept)                          3.05361    0.13815  22.104  < 2e-16
+    ## defPressure1                        -0.04417    0.05271  -0.838 0.402049
+    ## defPressure2                        -0.20734    0.05401  -3.839 0.000124
+    ## defPressure3                        -0.35313    0.05495  -6.427 1.30e-10
+    ## defPressure4                        -0.88757    0.06895 -12.872  < 2e-16
+    ## defPressure5                        -1.77738    0.17172 -10.350  < 2e-16
+    ## numDefPlayers1                      -1.53395    0.12540 -12.233  < 2e-16
+    ## numDefPlayers2                      -2.13752    0.12772 -16.736  < 2e-16
+    ## numDefPlayers3                      -2.29763    0.13243 -17.350  < 2e-16
+    ## numDefPlayers4                      -2.54280    0.14592 -17.426  < 2e-16
+    ## numDefPlayers5                      -2.38481    0.16791 -14.203  < 2e-16
+    ## numDefPlayers6                      -2.51917    0.20405 -12.346  < 2e-16
+    ## numDefPlayers7                      -2.35146    0.23032 -10.210  < 2e-16
+    ## numDefPlayers8                      -2.61225    0.31382  -8.324  < 2e-16
+    ## numDefPlayers9                      -2.86160    0.55344  -5.171 2.33e-07
+    ## numDefPlayers10                     -2.54209    0.79021  -3.217 0.001295
+    ## numDefPlayers11                    -11.48351   84.10841  -0.137 0.891401
+    ## dist                               -16.26719    0.41049 -39.628  < 2e-16
+    ## angle                               -0.91953    0.07837 -11.733  < 2e-16
+    ## game_state                           0.09004    0.04807   1.873 0.061027
+    ## type_of_attackOther not assisted    -0.19753    0.05539  -3.566 0.000362
+    ## type_of_attackDirect Free-Kick       0.83761    0.13803   6.068 1.29e-09
+    ## type_of_attackHead_Cross High       -1.01624    0.06163 -16.489  < 2e-16
+    ## type_of_attackCorner                -0.94830    0.07462 -12.708  < 2e-16
+    ## type_of_attackRebound                0.42015    0.08161   5.148 2.63e-07
+    ## type_of_attackFoot_Cross High       -0.53544    0.08166  -6.557 5.50e-11
+    ## type_of_attackFree Kick             -0.82249    0.08635  -9.525  < 2e-16
+    ## type_of_attackFoot_Cross Low        -0.18294    0.05964  -3.068 0.002158
+    ## type_of_attackOther_Cross Low       -0.37728    0.56536  -0.667 0.504560
+    ## type_of_attackHead_Open Play Pass   -0.56936    0.13640  -4.174 2.99e-05
+    ## type_of_attackOther_Cross High      -0.79224    0.42930  -1.845 0.064973
+    ## type_of_attackHead_Cross Low        -0.28207    0.29538  -0.955 0.339592
+    ## type_of_attackOther_Open Play Pass   0.32748    0.54541   0.600 0.548222
     ##                                       
     ## (Intercept)                        ***
-    ## shotQuality1                       ***
-    ## shotQuality2                       ***
-    ## shotQuality3                       ***
-    ## shotQuality4                       ***
-    ## shotQuality5                       ***
     ## defPressure1                          
-    ## defPressure2                          
-    ## defPressure3                       *  
+    ## defPressure2                       ***
+    ## defPressure3                       ***
     ## defPressure4                       ***
     ## defPressure5                       ***
     ## numDefPlayers1                     ***
@@ -1134,45 +1088,45 @@ summary(model2a)
     ## numDefPlayers11                       
     ## dist                               ***
     ## angle                              ***
-    ## game_state                            
-    ## type_of_attackOther not assisted   ** 
+    ## game_state                         .  
+    ## type_of_attackOther not assisted   ***
     ## type_of_attackDirect Free-Kick     ***
     ## type_of_attackHead_Cross High      ***
     ## type_of_attackCorner               ***
     ## type_of_attackRebound              ***
     ## type_of_attackFoot_Cross High      ***
     ## type_of_attackFree Kick            ***
-    ## type_of_attackFoot_Cross Low          
+    ## type_of_attackFoot_Cross Low       ** 
     ## type_of_attackOther_Cross Low         
-    ## type_of_attackHead_Open Play Pass  *  
-    ## type_of_attackOther_Cross High     ** 
+    ## type_of_attackHead_Open Play Pass  ***
+    ## type_of_attackOther_Cross High     .  
     ## type_of_attackHead_Cross Low          
-    ## type_of_attackOther_Open Play Pass .  
+    ## type_of_attackOther_Open Play Pass    
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
     ## 
     ## (Dispersion parameter for binomial family taken to be 1)
     ## 
     ##     Null deviance: 32235  on 42855  degrees of freedom
-    ## Residual deviance: 14774  on 42818  degrees of freedom
-    ## AIC: 14850
+    ## Residual deviance: 26074  on 42823  degrees of freedom
+    ## AIC: 26140
     ## 
-    ## Number of Fisher Scoring iterations: 10
+    ## Number of Fisher Scoring iterations: 9
 
 ``` r
 lrtest(model2a, model2)
 ```
 
     ## 
-    ## Model 1: goal ~ shotQuality + defPressure + numDefPlayers + dist + angle + 
+    ## Model 1: goal ~ defPressure + numDefPlayers + dist + angle + game_state + 
+    ##     type_of_attack
+    ## Model 2: goal ~ defPressure + numDefPlayers + numAttPlayers + dist + angle + 
     ##     game_state + type_of_attack
-    ## Model 2: goal ~ shotQuality + defPressure + numDefPlayers + numAttPlayers + 
-    ##     dist + angle + game_state + type_of_attack
     ## 
     ## L.R. Chisq       d.f.          P 
-    ##  4.2846901  5.0000000  0.5091969
+    ##  7.8842919  5.0000000  0.1627289
 
-P-value is large, so we can go for simple model.
+P-value is much above standard 0.05 value, so I think we can go for simple model.
 
 ``` r
 model2_fin <- model2a
@@ -1187,46 +1141,42 @@ Let's check how much the coefficients changed after removing numAttPlayers:
   model2$coefficients[names(model2_fin$coefficients)] * 100
 ```
 
-    ##                        (Intercept)                       shotQuality1 
-    ##                        -0.24021556                        -0.10962509 
-    ##                       shotQuality2                       shotQuality3 
-    ##                        -0.12263656                         0.36035441 
-    ##                       shotQuality4                       shotQuality5 
-    ##                         0.08661966                        -0.06223732 
-    ##                       defPressure1                       defPressure2 
-    ##                         3.47172728                       -26.12544026 
-    ##                       defPressure3                       defPressure4 
-    ##                        -5.63569604                        -2.02474558 
-    ##                       defPressure5                     numDefPlayers1 
-    ##                        -1.55310844                        -0.08336776 
-    ##                     numDefPlayers2                     numDefPlayers3 
-    ##                         0.23934878                         1.14690390 
-    ##                     numDefPlayers4                     numDefPlayers5 
-    ##                         1.99610307                         2.80170161 
-    ##                     numDefPlayers6                     numDefPlayers7 
-    ##                         3.30145690                         3.63212283 
-    ##                     numDefPlayers8                     numDefPlayers9 
-    ##                         2.71391858                         2.21530875 
-    ##                    numDefPlayers10                    numDefPlayers11 
-    ##                         0.60011824                         0.92198587 
-    ##                               dist                              angle 
-    ##                         0.16358840                        -1.04938853 
-    ##                         game_state   type_of_attackOther not assisted 
-    ##                         0.12268942                         0.90538261 
-    ##     type_of_attackDirect Free-Kick      type_of_attackHead_Cross High 
-    ##                         0.25698122                         0.03273374 
-    ##               type_of_attackCorner              type_of_attackRebound 
-    ##                         2.21536318                        -1.02657389 
-    ##      type_of_attackFoot_Cross High            type_of_attackFree Kick 
-    ##                         0.59514005                         2.01214114 
-    ##       type_of_attackFoot_Cross Low      type_of_attackOther_Cross Low 
-    ##                         4.42368034                        -0.01308871 
-    ##  type_of_attackHead_Open Play Pass     type_of_attackOther_Cross High 
-    ##                         3.52117530                        -0.03944862 
-    ##       type_of_attackHead_Cross Low type_of_attackOther_Open Play Pass 
-    ##                        -0.23873279                         0.09050079
+    ##                        (Intercept)                       defPressure1 
+    ##                        -0.24267194                        -9.18123548 
+    ##                       defPressure2                       defPressure3 
+    ##                        -3.22898305                        -2.83346639 
+    ##                       defPressure4                       defPressure5 
+    ##                        -1.42675259                        -0.82325712 
+    ##                     numDefPlayers1                     numDefPlayers2 
+    ##                        -0.08591229                         0.42213772 
+    ##                     numDefPlayers3                     numDefPlayers4 
+    ##                         1.73083800                         3.04683513 
+    ##                     numDefPlayers5                     numDefPlayers6 
+    ##                         4.28540317                         3.98909657 
+    ##                     numDefPlayers7                     numDefPlayers8 
+    ##                         4.01201502                         3.01943549 
+    ##                     numDefPlayers9                    numDefPlayers10 
+    ##                         1.78125928                         1.99047586 
+    ##                    numDefPlayers11                               dist 
+    ##                         0.58715008                         0.29351637 
+    ##                              angle                         game_state 
+    ##                        -1.38863794                        -0.46012350 
+    ##   type_of_attackOther not assisted     type_of_attackDirect Free-Kick 
+    ##                         1.34934187                         0.39494568 
+    ##      type_of_attackHead_Cross High               type_of_attackCorner 
+    ##                         0.10470430                         1.80921444 
+    ##              type_of_attackRebound      type_of_attackFoot_Cross High 
+    ##                        -1.13963880                         0.38848956 
+    ##            type_of_attackFree Kick       type_of_attackFoot_Cross Low 
+    ##                         1.15727354                         2.00110759 
+    ##      type_of_attackOther_Cross Low  type_of_attackHead_Open Play Pass 
+    ##                        -0.90303524                         1.83133187 
+    ##     type_of_attackOther_Cross High       type_of_attackHead_Cross Low 
+    ##                        -0.20374590                        -1.08451085 
+    ## type_of_attackOther_Open Play Pass 
+    ##                        -4.45420507
 
-Only in one case (coefficient associated with level 2 of `defPressure`) there has been significant change (26%). I think it is acceptable and therefore I don't include back `numAttPlayers`.
+All the percentage changes are below 10%. Therefore I don't include back `numAttPlayers`.
 
 ``` r
 model3_fin <- model2_fin
@@ -1361,7 +1311,7 @@ This time we pick the spline with 6 knots as it results in lowest AIC.
 So let's replace `dist` and `angle` variables with the fitted splines.
 
 ``` r
-model4 <- glm(goal ~ shotQuality + defPressure + numDefPlayers + rcs(dist, parms = 5)  + 
+model4 <- glm(goal ~ defPressure + numDefPlayers + rcs(dist, parms = 5)  + 
                       rcs(angle, parms = 6) + game_state + type_of_attack, 
               family = 'binomial', data = chances_train)
 summary(model4)
@@ -1369,71 +1319,61 @@ summary(model4)
 
     ## 
     ## Call:
-    ## glm(formula = goal ~ shotQuality + defPressure + numDefPlayers + 
-    ##     rcs(dist, parms = 5) + rcs(angle, parms = 6) + game_state + 
-    ##     type_of_attack, family = "binomial", data = chances_train)
+    ## glm(formula = goal ~ defPressure + numDefPlayers + rcs(dist, 
+    ##     parms = 5) + rcs(angle, parms = 6) + game_state + type_of_attack, 
+    ##     family = "binomial", data = chances_train)
     ## 
     ## Deviance Residuals: 
     ##     Min       1Q   Median       3Q      Max  
-    ## -3.2106  -0.2446  -0.0736  -0.0217   4.1455  
+    ## -2.5248  -0.4866  -0.3307  -0.2359   3.2196  
     ## 
     ## Coefficients:
     ##                                      Estimate Std. Error z value Pr(>|z|)
-    ## (Intercept)                           5.15045    0.31641  16.278  < 2e-16
-    ## shotQuality1                         -4.58362    0.27150 -16.882  < 2e-16
-    ## shotQuality2                         -2.01974    0.20769  -9.725  < 2e-16
-    ## shotQuality3                          0.98699    0.20085   4.914 8.92e-07
-    ## shotQuality4                          3.51212    0.20982  16.739  < 2e-16
-    ## shotQuality5                          6.93585    0.38726  17.910  < 2e-16
-    ## defPressure1                          0.11863    0.07105   1.670 0.094982
-    ## defPressure2                          0.01881    0.07223   0.260 0.794555
-    ## defPressure3                         -0.12819    0.07284  -1.760 0.078444
-    ## defPressure4                         -0.59365    0.08990  -6.604 4.01e-11
-    ## defPressure5                         -1.06687    0.21340  -4.999 5.75e-07
-    ## numDefPlayers1                       -2.08772    0.19009 -10.983  < 2e-16
-    ## numDefPlayers2                       -2.78989    0.19297 -14.458  < 2e-16
-    ## numDefPlayers3                       -2.92732    0.19789 -14.792  < 2e-16
-    ## numDefPlayers4                       -3.18458    0.21248 -14.988  < 2e-16
-    ## numDefPlayers5                       -3.01351    0.24033 -12.539  < 2e-16
-    ## numDefPlayers6                       -3.01000    0.28366 -10.611  < 2e-16
-    ## numDefPlayers7                       -2.79447    0.31477  -8.878  < 2e-16
-    ## numDefPlayers8                       -3.43491    0.47591  -7.218 5.29e-13
-    ## numDefPlayers9                       -4.18394    0.95950  -4.361 1.30e-05
-    ## numDefPlayers10                      -3.53401    1.37991  -2.561 0.010436
-    ## numDefPlayers11                     -14.31285  125.57421  -0.114 0.909254
-    ## rcs(dist, parms = 5)dist            -34.86268    1.73996 -20.037  < 2e-16
-    ## rcs(dist, parms = 5)dist'            69.34176   13.74337   5.045 4.52e-07
-    ## rcs(dist, parms = 5)dist''         -213.60673   46.30158  -4.613 3.96e-06
-    ## rcs(dist, parms = 5)dist'''         251.82059   52.06474   4.837 1.32e-06
-    ## rcs(angle, parms = 6)angle           -0.25940    1.37480  -0.189 0.850340
-    ## rcs(angle, parms = 6)angle'         -17.75623   22.49945  -0.789 0.430004
-    ## rcs(angle, parms = 6)angle''         63.74363   60.04688   1.062 0.288433
-    ## rcs(angle, parms = 6)angle'''       -96.23226   65.39308  -1.472 0.141130
-    ## rcs(angle, parms = 6)angle''''       70.15123   42.78904   1.639 0.101116
-    ## game_state                            0.09034    0.06259   1.443 0.148905
-    ## type_of_attackOther not assisted     -0.27187    0.07098  -3.830 0.000128
-    ## type_of_attackDirect Free-Kick        0.40276    0.18140   2.220 0.026402
-    ## type_of_attackHead_Cross High        -1.16968    0.08522 -13.726  < 2e-16
-    ## type_of_attackCorner                 -1.02772    0.09995 -10.282  < 2e-16
-    ## type_of_attackRebound                 0.52691    0.11398   4.623 3.78e-06
-    ## type_of_attackFoot_Cross High        -0.57317    0.11237  -5.101 3.38e-07
-    ## type_of_attackFree Kick              -0.71200    0.11648  -6.113 9.81e-10
-    ## type_of_attackFoot_Cross Low         -0.21837    0.08171  -2.672 0.007529
-    ## type_of_attackOther_Cross Low         0.05096    0.76105   0.067 0.946617
-    ## type_of_attackHead_Open Play Pass    -0.71348    0.19435  -3.671 0.000242
-    ## type_of_attackOther_Cross High        1.48543    0.59611   2.492 0.012707
-    ## type_of_attackHead_Cross Low         -0.64677    0.40877  -1.582 0.113598
-    ## type_of_attackOther_Open Play Pass    1.16082    0.72631   1.598 0.109991
+    ## (Intercept)                           3.58565    0.17168  20.885  < 2e-16
+    ## defPressure1                         -0.03553    0.05307  -0.669 0.503180
+    ## defPressure2                         -0.19527    0.05445  -3.586 0.000335
+    ## defPressure3                         -0.34048    0.05548  -6.137 8.40e-10
+    ## defPressure4                         -0.88880    0.06973 -12.746  < 2e-16
+    ## defPressure5                         -1.81254    0.17361 -10.440  < 2e-16
+    ## numDefPlayers1                       -1.39323    0.12983 -10.731  < 2e-16
+    ## numDefPlayers2                       -1.96006    0.13226 -14.819  < 2e-16
+    ## numDefPlayers3                       -2.12341    0.13668 -15.536  < 2e-16
+    ## numDefPlayers4                       -2.37614    0.14955 -15.889  < 2e-16
+    ## numDefPlayers5                       -2.19606    0.17038 -12.889  < 2e-16
+    ## numDefPlayers6                       -2.26295    0.20458 -11.061  < 2e-16
+    ## numDefPlayers7                       -2.02707    0.23036  -8.800  < 2e-16
+    ## numDefPlayers8                       -2.23324    0.31374  -7.118 1.09e-12
+    ## numDefPlayers9                       -2.42996    0.55243  -4.399 1.09e-05
+    ## numDefPlayers10                      -2.08813    0.78935  -2.645 0.008160
+    ## numDefPlayers11                     -10.96693   84.17185  -0.130 0.896335
+    ## rcs(dist, parms = 5)dist            -26.54627    1.26800 -20.936  < 2e-16
+    ## rcs(dist, parms = 5)dist'            62.98115   10.42205   6.043 1.51e-09
+    ## rcs(dist, parms = 5)dist''         -195.40402   35.52501  -5.500 3.79e-08
+    ## rcs(dist, parms = 5)dist'''         220.47235   40.66846   5.421 5.92e-08
+    ## rcs(angle, parms = 6)angle            0.09218    1.02998   0.089 0.928687
+    ## rcs(angle, parms = 6)angle'          -4.81296   16.98219  -0.283 0.776861
+    ## rcs(angle, parms = 6)angle''          8.82606   45.43167   0.194 0.845964
+    ## rcs(angle, parms = 6)angle'''        -6.38575   49.73361  -0.128 0.897833
+    ## rcs(angle, parms = 6)angle''''        3.09055   32.85366   0.094 0.925053
+    ## game_state                            0.09280    0.04841   1.917 0.055269
+    ## type_of_attackOther not assisted     -0.23288    0.05580  -4.174 3.00e-05
+    ## type_of_attackDirect Free-Kick        0.59086    0.13631   4.335 1.46e-05
+    ## type_of_attackHead_Cross High        -1.07878    0.06380 -16.910  < 2e-16
+    ## type_of_attackCorner                 -1.04571    0.07696 -13.589  < 2e-16
+    ## type_of_attackRebound                 0.32209    0.08428   3.822 0.000132
+    ## type_of_attackFoot_Cross High        -0.56546    0.08331  -6.787 1.15e-11
+    ## type_of_attackFree Kick              -0.87391    0.08813  -9.916  < 2e-16
+    ## type_of_attackFoot_Cross Low         -0.26015    0.06166  -4.219 2.45e-05
+    ## type_of_attackOther_Cross Low        -0.60143    0.57638  -1.043 0.296734
+    ## type_of_attackHead_Open Play Pass    -0.73634    0.14049  -5.241 1.60e-07
+    ## type_of_attackOther_Cross High       -0.94918    0.43593  -2.177 0.029452
+    ## type_of_attackHead_Cross Low         -0.37982    0.30224  -1.257 0.208867
+    ## type_of_attackOther_Open Play Pass    0.07701    0.55982   0.138 0.890588
     ##                                       
     ## (Intercept)                        ***
-    ## shotQuality1                       ***
-    ## shotQuality2                       ***
-    ## shotQuality3                       ***
-    ## shotQuality4                       ***
-    ## shotQuality5                       ***
-    ## defPressure1                       .  
-    ## defPressure2                          
-    ## defPressure3                       .  
+    ## defPressure1                          
+    ## defPressure2                       ***
+    ## defPressure3                       ***
     ## defPressure4                       ***
     ## defPressure5                       ***
     ## numDefPlayers1                     ***
@@ -1445,7 +1385,7 @@ summary(model4)
     ## numDefPlayers7                     ***
     ## numDefPlayers8                     ***
     ## numDefPlayers9                     ***
-    ## numDefPlayers10                    *  
+    ## numDefPlayers10                    ** 
     ## numDefPlayers11                       
     ## rcs(dist, parms = 5)dist           ***
     ## rcs(dist, parms = 5)dist'          ***
@@ -1456,15 +1396,15 @@ summary(model4)
     ## rcs(angle, parms = 6)angle''          
     ## rcs(angle, parms = 6)angle'''         
     ## rcs(angle, parms = 6)angle''''        
-    ## game_state                            
+    ## game_state                         .  
     ## type_of_attackOther not assisted   ***
-    ## type_of_attackDirect Free-Kick     *  
+    ## type_of_attackDirect Free-Kick     ***
     ## type_of_attackHead_Cross High      ***
     ## type_of_attackCorner               ***
     ## type_of_attackRebound              ***
     ## type_of_attackFoot_Cross High      ***
     ## type_of_attackFree Kick            ***
-    ## type_of_attackFoot_Cross Low       ** 
+    ## type_of_attackFoot_Cross Low       ***
     ## type_of_attackOther_Cross Low         
     ## type_of_attackHead_Open Play Pass  ***
     ## type_of_attackOther_Cross High     *  
@@ -1476,10 +1416,10 @@ summary(model4)
     ## (Dispersion parameter for binomial family taken to be 1)
     ## 
     ##     Null deviance: 32235  on 42855  degrees of freedom
-    ## Residual deviance: 14598  on 42811  degrees of freedom
-    ## AIC: 14688
+    ## Residual deviance: 25927  on 42816  degrees of freedom
+    ## AIC: 26007
     ## 
-    ## Number of Fisher Scoring iterations: 10
+    ## Number of Fisher Scoring iterations: 9
 
 All coefficients associated with angle spline are statistically insignificant. But what if we decide to remove this covariate?
 
@@ -1488,79 +1428,75 @@ lrtest(model4a, model4)
 ```
 
     ## 
-    ## Model 1: goal ~ shotQuality + defPressure + numDefPlayers + rcs(dist, 
-    ##     parms = 5) + game_state + type_of_attack
-    ## Model 2: goal ~ shotQuality + defPressure + numDefPlayers + rcs(dist, 
-    ##     parms = 5) + rcs(angle, parms = 6) + game_state + type_of_attack
+    ## Model 1: goal ~ defPressure + numDefPlayers + rcs(dist, parms = 5) + game_state + 
+    ##     type_of_attack
+    ## Model 2: goal ~ defPressure + numDefPlayers + rcs(dist, parms = 5) + rcs(angle, 
+    ##     parms = 6) + game_state + type_of_attack
     ## 
     ## L.R. Chisq       d.f.          P 
-    ##   125.9843     5.0000     0.0000
+    ##   138.7636     5.0000     0.0000
 
 ``` r
 (model4a$coefficients - model4$coefficients[names(model4a$coefficients)])/
   model4$coefficients[names(model4a$coefficients)] * 100
 ```
 
-    ##                        (Intercept)                       shotQuality1 
-    ##                        -8.51582900                        -0.44936476 
-    ##                       shotQuality2                       shotQuality3 
-    ##                        -0.12875654                        -0.80578990 
-    ##                       shotQuality4                       shotQuality5 
-    ##                        -0.02530642                        -0.20203439 
-    ##                       defPressure1                       defPressure2 
-    ##                         3.62912340                        52.94285271 
-    ##                       defPressure3                       defPressure4 
-    ##                        -0.45954160                         1.04468883 
-    ##                       defPressure5                     numDefPlayers1 
-    ##                         0.76568372                        -5.13077392 
-    ##                     numDefPlayers2                     numDefPlayers3 
-    ##                        -4.70473612                        -6.43772187 
-    ##                     numDefPlayers4                     numDefPlayers5 
-    ##                        -6.41218750                        -7.91439190 
-    ##                     numDefPlayers6                     numDefPlayers7 
-    ##                        -8.51290028                       -10.67933431 
-    ##                     numDefPlayers8                     numDefPlayers9 
-    ##                       -11.22533334                        -9.83845921 
-    ##                    numDefPlayers10                    numDefPlayers11 
-    ##                       -12.66985794                        -3.03150921 
-    ##           rcs(dist, parms = 5)dist          rcs(dist, parms = 5)dist' 
-    ##                        -1.41093273                       -17.34122788 
-    ##         rcs(dist, parms = 5)dist''        rcs(dist, parms = 5)dist''' 
-    ##                       -24.66820220                       -27.51634424 
-    ##                         game_state   type_of_attackOther not assisted 
-    ##                         7.88713122                        -0.05861418 
-    ##     type_of_attackDirect Free-Kick      type_of_attackHead_Cross High 
-    ##                       -26.90444268                        -7.99366599 
-    ##               type_of_attackCorner              type_of_attackRebound 
-    ##                        -2.58873475                        -2.20640411 
-    ##      type_of_attackFoot_Cross High            type_of_attackFree Kick 
-    ##                         2.51599646                        -8.79422263 
-    ##       type_of_attackFoot_Cross Low      type_of_attackOther_Cross Low 
-    ##                       -33.46330068                       236.98542743 
-    ##  type_of_attackHead_Open Play Pass     type_of_attackOther_Cross High 
-    ##                        -4.11472706                         7.46287679 
-    ##       type_of_attackHead_Cross Low type_of_attackOther_Open Play Pass 
-    ##                        -2.06761092                         1.03110415
+    ##                        (Intercept)                       defPressure1 
+    ##                         -8.9105339                          1.2553446 
+    ##                       defPressure2                       defPressure3 
+    ##                         -1.1351860                          0.9464652 
+    ##                       defPressure4                       defPressure5 
+    ##                          0.5761415                          0.1386064 
+    ##                     numDefPlayers1                     numDefPlayers2 
+    ##                         -6.6072892                         -5.5601394 
+    ##                     numDefPlayers3                     numDefPlayers4 
+    ##                         -7.4893524                         -7.3441900 
+    ##                     numDefPlayers5                     numDefPlayers6 
+    ##                         -9.1729618                        -10.2596984 
+    ##                     numDefPlayers7                     numDefPlayers8 
+    ##                        -12.9377905                        -12.9929508 
+    ##                     numDefPlayers9                    numDefPlayers10 
+    ##                        -13.0697908                        -16.7470020 
+    ##                    numDefPlayers11           rcs(dist, parms = 5)dist 
+    ##                         -3.6488812                         -1.8699211 
+    ##          rcs(dist, parms = 5)dist'         rcs(dist, parms = 5)dist'' 
+    ##                        -18.5681812                        -25.1974292 
+    ##        rcs(dist, parms = 5)dist'''                         game_state 
+    ##                        -28.3725250                          1.2197759 
+    ##   type_of_attackOther not assisted     type_of_attackDirect Free-Kick 
+    ##                          2.6736951                        -13.4989886 
+    ##      type_of_attackHead_Cross High               type_of_attackCorner 
+    ##                         -7.4586307                         -2.9291296 
+    ##              type_of_attackRebound      type_of_attackFoot_Cross High 
+    ##                         -2.9798136                          2.0969320 
+    ##            type_of_attackFree Kick       type_of_attackFoot_Cross Low 
+    ##                         -6.8178554                        -18.5233300 
+    ##      type_of_attackOther_Cross Low  type_of_attackHead_Open Play Pass 
+    ##                         -6.8740132                         -4.3118933 
+    ##     type_of_attackOther_Cross High       type_of_attackHead_Cross Low 
+    ##                         -9.1587231                        -10.4228854 
+    ## type_of_attackOther_Open Play Pass 
+    ##                         -6.9008265
 
-Likelihood ratio test suggests that's clearly not a good idea. Also percentage changes imply that an angle spline provides a needed adjustments to other covariates, so we should probably leave it in a model.
+Likelihood ratio test suggests that's clearly not a good idea. Also percentage changes increased and now we can observe a few witch a change varying from 10% to 30% implying that an angle spline provides a needed adjustments to other covariates. So we should probably leave it in a model.
 
 Finally let's test the model performance.
 
 ``` r
-ROC(form = goal ~ shotQuality + defPressure + numDefPlayers + rcs(dist, parms = 5)  + 
+ROC(form = goal ~ defPressure + numDefPlayers + rcs(dist, parms = 5)  + 
                   rcs(angle, parms = 6) + game_state + type_of_attack, 
     family = 'binomial', data = chances_test, plot = 'ROC')
 ```
 
 ![](expected_goals_model_files/figure-markdown_github/unnamed-chunk-53-1.png)
 
-AUC = 95% is really high. I had been quite sceptic at the beginning, so I altered test sets and the AUC didn't change much. Also McFadden ratio with the score of 0.55 is satisfying.
+AUC = 79% is really high. I had been quite sceptic at the beginning, so I altered test sets and the AUC didn't change much. Also McFadden ratio with the score of 0.2 is quite satisfying.
 
 ``` r
 1 - logLik(model4)/logLik(glm(goal~1, data = chances_train, family = 'binomial'))
 ```
 
-    ## 'log Lik.' 0.5471289 (df=45)
+    ## 'log Lik.' 0.1956968 (df=40)
 
 Although classifying the `goal` variable isn't out objective here, let's make use of it and calculate RMSE.
 
@@ -1581,9 +1517,9 @@ ggplot() + geom_line(aes(seq(0.01, 1, by = 0.01), rmse_all))
 rmse_all[which.min(rmse_all)]
 ```
 
-    ##    pred50 
-    ## 0.2722226
+    ##    pred65 
+    ## 0.3292909
 
-*pitch\_plot is a slightly modified version of a function shared by @FC\_rstats.*
+We get the lowest test error while cutting off on 0.65, however the plot implies that other cut-off level, as long as greater than 0.4) would give similar error. *pitch\_plot is a slightly modified version of a function shared by @FC\_rstats.*
 
 **This article was written with the aid of StrataData, which is property of [Stratagem Technologies](www.stratagem.co). StrataData powers the [StrataBet Sports Trading Platform](https://app.stratabet.com), in addition to [StrataBet Premium Recommendations](https://stratatips.co).**
