@@ -1,3 +1,6 @@
+#Please note, that this is slightly modified and adjusted to @Stratabet data version of @FC_rstats work available here: 
+# https://github.com/FCrSTATS/Visualisations/blob/master/3.CreateAPitch.md
+
 library(ggplot2)
 
 grass_colour = "#202020"
