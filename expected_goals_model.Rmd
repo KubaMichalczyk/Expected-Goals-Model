@@ -1,0 +1,666 @@
+---
+title: "Expected Goals model"
+author: "Twitter: @KubaMichalczyk"
+output: rmarkdown::github_document
+---
+
+Since I started to follow the football analytics community, Expected Goals has been popping up everywhere. However, methodology is rarely described, not to mention the whole process of modelling. Therefore I just decided to document my work and publish it, so that:
+
+- when I'll post some remark/graph with xG calculated you could easily check how it's calculated and judge for yourself if it has any value
+- those who have access to \@Stratabet data could just take it from there and possibly improve it. 
+
+Data contains recorded chances from 5 biggest European leagues (German Bundesliga, Spanish Primera Division, English Premier League, Italian Serie A and French League 1) during whole 2016/2017 season and a part of current season (until 19/02/2017).
+
+## Data preparation
+```{r importing libraries, include = TRUE, warning = FALSE, message = FALSE}
+library(tidyverse)
+library(lubridate)
+library(magick)
+
+source('strata_pitch_plot.R')
+```
+
+Firstly, we import the data. While importing data I set the time parser as character as the default guessing interprets this variable as time type (which means time of a day) and fails to read all the values greater than 24:00. I also set the parser to all location variables as it'll be helpful
+to plot some observations directly on the pitch while tidying data.
+
+```{r reading data, echo = TRUE, results = 'hide', warning = FALSE}
+chances_PL_16_17 <- read_csv('chances_EngPL_2016_2017.csv', 
+                             col_types = cols(time = col_character(),
+                                              location_x = col_double(),
+                                              location_y = col_double(),
+                                              primaryLocation_x = col_double(),
+                                              primaryLocation_y = col_double()))
+chances_L1_16_17 <- read_csv('chances_FraL1_2016_2017.csv',
+                             col_types = cols(time = col_character(),
+                                              location_x = col_double(),
+                                              location_y = col_double(),
+                                              primaryLocation_x = col_double(),
+                                              primaryLocation_y = col_double()))
+chances_BL_16_17 <- read_csv('chances_GerBL_2016_2017.csv', 
+                             col_types = cols(time = col_character(),
+                                              location_x = col_double(),
+                                              location_y = col_double(),
+                                              primaryLocation_x = col_double(),
+                                              primaryLocation_y = col_double()))
+chances_SA_16_17 <- read_csv('chances_ItaSA_2016_2017.csv', 
+                             col_types = cols(time = col_character(),
+                                              location_x = col_double(),
+                                              location_y = col_double(),
+                                              primaryLocation_x = col_double(),
+                                              primaryLocation_y = col_double()))
+chances_PD_16_17 <- read_csv('chances_SpaPD_2016_2017.csv', 
+                             col_types = cols(time = col_character(),
+                                              location_x = col_double(),
+                                              location_y = col_double(),
+                                              primaryLocation_x = col_double(),
+                                              primaryLocation_y = col_double()))
+chances_PL_17_18 <- read_csv('chances_EngPL_from_2017-07-01.csv', 
+                             col_types = cols(time = col_character(),
+                                              location_x = col_double(),
+                                              location_y = col_double(),
+                                              primaryLocation_x = col_double(),
+                                              primaryLocation_y = col_double()))
+chances_L1_17_18 <- read_csv('chances_FraL1_from_2017-07-01.csv', 
+                             col_types = cols(time = col_character(),
+                                              location_x = col_double(),
+                                              location_y = col_double(),
+                                              primaryLocation_x = col_double(),
+                                              primaryLocation_y = col_double()))
+chances_BL_17_18 <- read_csv('chances_GerBL_from_2017-07-01.csv', 
+                             col_types = cols(time = col_character(),
+                                              location_x = col_double(),
+                                              location_y = col_double(),
+                                              primaryLocation_x = col_double(),
+                                              primaryLocation_y = col_double()))
+chances_SA_17_18 <- read_csv('chances_ItaSA_from_2017-07-01.csv', 
+                             col_types = cols(time = col_character(),
+                                              location_x = col_double(),
+                                              location_y = col_double(),
+                                              primaryLocation_x = col_double(),
+                                              primaryLocation_y = col_double()))
+chances_PD_17_18 <- read_csv('chances_SpaPD_from_2017-07-01.csv', 
+                             col_types = cols(time = col_character(),
+                                              location_x = col_double(),
+                                              location_y = col_double(),
+                                              primaryLocation_x = col_double(),
+                                              primaryLocation_y = col_double()))
+                           
+chances_all <- bind_rows(chances_BL_16_17, chances_L1_16_17, chances_PD_16_17, chances_PL_16_17, 
+                         chances_SA_16_17, chances_BL_17_18, chances_L1_17_18, chances_PD_17_18,
+                         chances_PL_17_18, chances_SA_17_18)
+chances_all <- chances_all %>% rename(id = X1)
+```
+
+
+```{r, include = TRUE}
+chances_all %>% glimpse()
+```
+
+Most of variables were parsed as character, but let's keep them this way for now (I will parse them into appropriate type (ex. factor or double) just before modelling part).
+
+Firstly, let's check ID's uniqueness.
+```{r, include = TRUE}
+chances_all %>% group_by(id) %>% filter(n() > 1) %>% count()
+```
+
+There are some duplicated IDs, so let's give our own IDs based on time of event.
+
+```{r, include = TRUE}
+chances_all <- chances_all %>% 
+  arrange(kickoffDate, kickoffTime, as.numeric(ms(time))) %>%
+  mutate(old_id = id, id = row_number())
+```
+
+Note: This is not accurately sorted by time of event, but it will do.
+
+Next, we exclude penalties from the data set. Due to their specificity another model could be build to capture penalties.
+
+```{r, include = TRUE}
+chances <- chances_all %>% filter(!icon == 'penawarded')
+penalties <- chances %>% filter(str_detect(type, 'Penalty') | icon == 'penmissed')
+chances <- chances %>% filter(!id %in% penalties$id)
+```
+
+Now we will check a data coherence.
+
+```{r, fig.align = "center", echo = FALSE}
+logo <- image_read('StrataBet_Logo.png') %>% image_scale("120")
+plt <- image_graph(width = 600, height = 450, res = 72)
+chances %>% ggplot() + geom_bar(aes(icon)) + coord_flip()
+invisible(dev.off())
+plt %>% image_composite(logo, offset = "+470+10")
+```
+
+We don't want to model own goal; we are excluding them from our data set.
+
+```{r, include = TRUE}
+chances <- chances %>% filter(!icon == 'owngoal')
+```
+```{r, include = TRUE, fig.align = "center", echo = FALSE, optipng='-o7'}
+plt <- image_graph(width = 600, height = 450, res = 72)
+chances %>% ggplot() + geom_bar(aes(chanceRating)) + coord_flip()
+invisible(dev.off())
+plt %>% image_composite(logo, offset = "+470+10")
+```
+
+There are still some penalties...
+
+```{r, include = TRUE}
+penalties2 <- chances %>% filter(chanceRating == 'Penalty')
+penalties <- bind_rows(penalties, penalties2)
+chances <- chances %>% filter(!id %in% penalties2$id)
+```
+
+...and some inconcistencies in inputted values - let's fix them as well.
+
+```{r, include = TRUE, echo = TRUE}
+chances <- chances %>% 
+  mutate(chanceRating = case_when(
+    str_detect(chanceRating, '[Ss]uperb') ~ 'Superb',
+    str_detect(chanceRating, '[Gg]reat') ~ 'Great',
+    str_detect(chanceRating, '[Vv]ery[ ]*[Gg]ood*') ~ 'Very good',
+    str_detect(chanceRating, '^[Gg]ood') ~ 'Good',
+    str_detect(chanceRating, '[Ff]airly') ~ 'Fairly good',
+    str_detect(chanceRating, '[Pp]oor') ~ 'Poor'
+    )
+  )
+```
+
+```{r, echo = TRUE, fig.align = "center", include = TRUE}
+plt <- image_graph(width = 600, height = 450, res = 72)
+chances %>% ggplot() + geom_bar(aes(type)) + coord_flip()
+invisible(dev.off())
+plt %>% image_composite(logo, offset = "+470+385")
+```
+
+Let's unify the inputs (ex. 'Direct Free-Kick' and 'Direct Free kick').
+
+```{r, include = TRUE}
+chances <- chances %>%
+  mutate(type = case_when(
+    str_detect(type, 'Open [Pp]lay') ~ 'Open Play',
+    str_detect(type, 'Direct [Ff]ree[- ][Kk]ick') ~ 'Direct Free-Kick',
+    TRUE ~ type))
+```
+
+According to Stratagem definitions a direct shot from corner is marked as Direct Free-kick.
+So we should investigate which of these should be remarked as Direct Free-kick and which
+of these are just `primaryType` - we can do so based on (x, y) coordinates.
+
+```{r, fig.align = "center", include = TRUE, echo = 6, optipng='-o7'}
+temp <- chances %>% filter(str_detect(type, 'Direct [Cc]orner'))
+plt <- image_graph(width = 800, height = 500, res = 72)
+pitch_plot() + geom_point(data = temp, aes(location_x, location_y), color = 'yellow', size = 2)
+invisible(dev.off())
+plt %>% image_composite(logo, offset = "+55+30")
+temp2 <- temp %>% filter((location_x < -130 & bodyPart == 'Left') | 
+                  (location_x > 130 & bodyPart == 'Right')) 
+temp2 %>% count()
+```
+
+We can observe that 20 chances which are Corner kicks (based on location) are in-swingers
+(corners swerving towards the goal) based on x coordinate and foot used
+So these could be actually direct attempt with Khazri, Callejon and Pulgar unique goals 
+among them.
+
+```{r, include = TRUE}
+chances <- chances %>% 
+  mutate(type = ifelse(id %in% temp2$id, 'Direct Free-Kick', type))
+```
+
+```{r, echo = FALSE, fig.align = "center", fig.width = 20, include = TRUE}
+temp <- chances %>% filter(str_detect(type, 'Direct [Cc]orner'))
+plt <- image_graph(width = 900, height = 500, res = 72)
+pitch_plot() + geom_point(data = temp, aes(location_x, location_y, shape = bodyPart), 
+                          color = 'yellow', size = 2)
+invisible(dev.off())
+plt %>% image_composite(logo, offset = "+60+30")
+```
+
+The remaining 10 observations are just shots after corner-kick, so we should probably change
+a `type` to 'Open Play' and `primaryType` to 'Corner'.
+
+```{r, include = TRUE}
+chances <- chances %>% 
+  mutate(type = ifelse(id %in% temp$id,'Open Play', type),
+         primaryType = ifelse(id %in% temp$id, 'Corner', primaryType))
+```
+
+Ok, so we are left with 3 categories. But let's keep in mind that Dangerous Moment is by definition the moment when there was an opportunity to shoot, but a shot wasn't taken. Since there couldn't be a goal in these situations, we should probably exclude these observations from our training set and include them in the test set only.
+
+```{r, echo = FALSE, fig.align = "center", include = TRUE, optipng='-o7'}
+plt <- image_graph(width = 600, height = 450, res = 72)
+chances %>% ggplot() + geom_bar(aes(bodyPart))
+invisible(dev.off())
+plt %>% image_composite(logo, offset = "+70+10")
+```
+
+We can observe that shots with right foot were taken over 1.5 times more than with left foot. This
+is certainly not surprising as left footed players are a definite minority and beyond any doubt you usually prefer to shoot with your stronger foot. But, as we do not have an infomation if the player is 
+right or left footed, I don't think it's a good idea to differentiate. As an information if player takes the shot with his stronger or weaker foot seems to be crucial it would be a good idea to look for some dataset (could be for ex. from transfermarkt or FIFA game series) with information if player is left/right footed and match the datasets together. This makes a room for improvement in future, but as for now we just create a one level for both feets. 
+
+```{r, include = TRUE}
+chances <- chances %>%
+  mutate(bodyPart = ifelse(bodyPart %in% c('Left', 'Right'), 'Foot', bodyPart))
+```
+```{r, echo = FALSE, fig.align = "center", include = TRUE, optipng='-o7'}
+plt <- image_graph(width = 600, height = 450, res = 72)
+chances %>% ggplot() + geom_bar(aes(outcome))
+invisible(dev.off())
+plt %>% image_composite(logo, offset = "+70+10")
+```
+
+Nothing baffling here.
+
+```{r, echo = FALSE, fig.align = "center", include = TRUE, optipng='-o7'}
+plt <- image_graph(width = 600, height = 450, res = 72)
+chances %>% ggplot() + geom_bar(aes(primaryType)) + coord_flip()
+invisible(dev.off())
+plt %>% image_composite(logo, offset = "+470+10")
+```
+
+We were supposed to exclude all penalties, but there are some assists marked as 'Penalty Earned'. So let's take a closer look.
+
+```{r, echo = FALSE, fig.align = "center", include = TRUE, optipng='-o7'}
+temp <- chances %>% filter(primaryType == 'Penalty Earned')
+plt <- image_graph(width = 800, height = 500, res = 72)
+pitch_plot() + geom_point(data = temp, aes(primaryLocation_x, primaryLocation_y), 
+                          color = 'yellow', size = 2)
+invisible(dev.off())
+plt %>% image_composite(logo, offset = "+55+30")
+```
+
+In 11 out of 14 cases this can't be Penalty Earned as the location is outside penalty area. These chances don't look like as penalties taken as well (location again). As it's hard to figure out what should be a correct value of `primaryType` in these cases I'll just replace them with `NA`.
+
+```{r, include = TRUE}
+chances <- chances %>% mutate(primaryType = ifelse(primaryType == 'Penalty Earned',
+                                                   NA, primaryType))
+```
+```{r, echo = FALSE, fig.align = "center", include = TRUE, optipng='-o7'}
+plt <- image_graph(width = 600, height = 450, res = 72)
+chances %>% ggplot() + geom_bar(aes(secondaryType)) + coord_flip()
+invisible(dev.off())
+plt %>% image_composite(logo, offset = "+470+10")
+
+plt <- image_graph(width = 600, height = 450, res = 72)
+chances %>% filter(secondaryType == 'Penalty Earned') %>% 
+  ggplot() + geom_bar(aes(primaryType)) + coord_flip()
+invisible(dev.off())
+plt %>% image_composite(logo, offset = "+470+10")
+```
+
+These chances looks like deflected penalties, but since after deflection we have 'Open Play' chance let's keep it.
+
+```{r, echo = FALSE, fig.align = "center", warning = FALSE, include = TRUE, optipng='-o7'}
+plt <- image_graph(width = 900, height = 500, res = 72)
+pitch_plot() + geom_hex(data = chances, aes(location_x, location_y))
+invisible(dev.off())
+plt %>% image_composite(logo, offset = "+55+35")
+```
+
+There are some chances recorded from abnormal distance, so let's look closer at them.
+
+```{r, echo = FALSE, fig.align = "center", warning = FALSE, include = TRUE, optipng='-o7'}
+temp <- chances %>% filter(location_y > 300)
+plt <- image_graph(width = 900, height = 500, res = 72)
+pitch_plot() + geom_point(data = temp, aes(location_x, location_y, shape = bodyPart), 
+                          color = 'red', size = 2) + 
+                geom_segment(data = temp, aes(x = primaryLocation_x, primaryLocation_y,
+                                  xend = location_x, yend = location_y), color = '#C43534',
+                             arrow = arrow(length = unit(0.3, 'cm')))
+invisible(dev.off())
+plt %>% image_composite(logo, offset = "+55+30")
+```
+
+We can see that two of these shots are marked as a shot with Head, which is impossible from
+such a distance. The third and fourth ones are marked as assisted from the other side of the pitch 
+in 49th and 13th minute of a game, respectively - hence I doubt that were a one of these situations where goalie is off position. So all of these four are just probably incorrectly inputted - I'll remove them so they don't affect a model fit.
+
+```{r, include = TRUE}
+chances <- chances %>% filter(!id %in% temp$id)
+```
+
+Now let's create some variables, which may be useful to our xG model.
+
+Starting from the obvious one - goal, as well as the distance and angle from which shot took 
+place. Here, the `angle` is defined to be 0 for shots directly in front of goal, and 1 for shots
+from the endline. `dist` is distance standarised with maximum possible distance (from 
+the corner on the other side of the pitch).
+
+```{r, include = TRUE}
+chances <- chances %>% 
+  mutate(goal = (icon == 'goal'),
+         dist = sqrt(location_x^2+location_y^2)/sqrt(136^2 + 420^2),
+         angle = abs(atan2(location_x, location_y)/(pi/2)))
+```
+
+Let's also create a variable that describes the state (as a goal difference) in which game was in while chance occurred.
+
+```{r, include = TRUE}
+chances <- chances %>% 
+  separate(time, c('min', 'sec'), sep = ":", remove = FALSE) %>% 
+  group_by(gsm_id) %>% 
+  arrange(min, sec, .by_group = TRUE) %>% 
+  mutate(hometeam_score = lag(goal * (team == hometeam_team1), default = 0), 
+         awayteam_score = lag(goal * (team == awayteam_team2), default = 0),
+         game_state = ifelse(team == hometeam_team1, hometeam_score - awayteam_score, awayteam_score - hometeam_score)) %>% 
+  select(-hometeam_score, -awayteam_score) %>% 
+  ungroup()
+```
+
+Finally, we would like to gather infomation from `type`, `bodyPart` and `primaryType` to capture the
+type of attack. We will differentiate:
+
+1. chances with Foot after Open Play Pass
+1. chances with Head after Open Play Pass
+1. chances with Other after Open Play Pass
+1. chances with Foot after Cross Low
+1. chances with Head after Cross Low
+1. chances with Other after Cross Low
+1. chances with Foot after Cross High
+1. chances with Head after Cross High
+1. chances with Other after Cross High
+1. chances with Foot after Free-Kicks and Corners
+1. chances with Head after Free-Kicks and Corners
+1. chances with Other after Free-Kicks and Corners
+1. Rebounds
+1. Direct free-kicks (incl. direct corners)
+1. other type of chances without an assist
+
+We could do it by interactions, but then we would have 3\*3\*15 types.
+
+We would like to also keep the information if the type of chance was 'Dangerous Moment'
+so firstly, we'll just create dichotomous variable `dang_moment`.
+
+```{r, echo = TRUE, fig.align = "center", include = TRUE}
+chances <- chances %>% 
+  mutate(dang_moment = (type == 'Dangerous Moment'),
+      type_of_attack = case_when(
+      bodyPart == 'Foot' & primaryType == 'Open Play Pass' ~ paste(bodyPart, primaryType, sep = '_'),
+      bodyPart == 'Head' & primaryType == 'Open Play Pass' ~ paste(bodyPart, primaryType, sep = '_'),
+      bodyPart == 'Other' & primaryType == 'Open Play Pass' ~ paste(bodyPart, primaryType, sep = '_'),
+      bodyPart == 'Foot' & primaryType == 'Cross Low' ~ paste(bodyPart, primaryType, sep = '_'),
+      bodyPart == 'Head' & primaryType == 'Cross Low' ~ paste(bodyPart, primaryType, sep = '_'),
+      bodyPart == 'Other' & primaryType == 'Cross Low' ~ paste(bodyPart, primaryType, sep = '_'),
+      bodyPart == 'Foot' & primaryType == 'Cross High' ~ paste(bodyPart, primaryType, sep = '_'),
+      bodyPart == 'Head' & primaryType == 'Cross High' ~ paste(bodyPart, primaryType, sep = '_'),
+      bodyPart == 'Other' & primaryType == 'Cross High' ~ paste(bodyPart, primaryType, sep = '_'),
+      bodyPart == 'Foot' & primaryType %in% c('Corner', 'Free Kick') ~ paste(bodyPart, primaryType, sep = '_'),
+      bodyPart == 'Head' & primaryType %in% c('Corner', 'Free Kick') ~ paste(bodyPart, primaryType, sep = '_'),
+      bodyPart == 'Other' & primaryType %in% c('Corner', 'Free Kick') ~ paste(bodyPart, primaryType, sep = '_'),
+      primaryType %in% c('Shot (Opposition Rebound)', 'Shot (Deflection)', 'Shot (Woodwork Rebound)') ~
+        'Rebound',
+      type == 'Direct Free-Kick' ~ 'Direct Free-Kick',
+      TRUE ~ 'Other not assisted'
+      )
+)
+```
+
+Now we will parse to factor some variables read in as character.
+
+```{r, include = TRUE}
+chances <- chances %>% mutate(competition = parse_factor(competition, levels = NULL),
+                              icon = parse_factor(icon, levels = NULL),
+                              chanceRating = parse_factor(chanceRating, 
+                                                          levels = c('Poor', 'Fairly good', 
+                                                                     'Good', 'Very good',
+                                                                     'Great', 'Superb')),
+                              type = parse_factor(type, levels = NULL),
+                              bodyPart = parse_factor(bodyPart, levels = NULL),
+                              shotQuality = parse_factor(shotQuality, levels = 0:5),
+                              defPressure = parse_factor(defPressure, levels = 0:5),
+                              numDefPlayers = parse_factor(numDefPlayers, levels = 0:11),
+                              numAttPlayers = parse_factor(numAttPlayers, levels = 0:11),
+                              outcome = parse_factor(outcome, levels = NULL),
+                              primaryType = parse_factor(primaryType, levels = NULL),
+                              secondaryType = parse_factor(secondaryType, levels = NULL),
+                              type_of_attack = parse_factor(type_of_attack, levels = NULL)
+                              )
+```
+
+And finally, split the data into training and testing set, keeping to the standard 70/30 rule. As previously mentioned, we'll also exclude dangerous moments from our training set.
+
+```{r, include = TRUE}
+set.seed(0)
+chances_train <- sample_frac(chances, 0.7, replace = FALSE)
+chances_test <- chances %>% filter(!id %in% chances_train$id)
+chances_train <- chances_train %>% filter(!dang_moment)
+count(chances_train)/count(chances)
+```
+
+Now we have around 67% of data set in a training set, but it will do.
+
+## Building a xG model
+In my xG modelling attempt I have employed purposeful selection of covariates. There exist some
+fancy algorithms one could use (ex. stepwise or best subset selection). But what's the fun then? 
+
+```{r, include = TRUE, message = FALSE, warning = FALSE, echo = 1:4}
+library(lmtest)
+library(rms)
+library(Epi)
+```
+
+### Step 1.
+Firstly, we will build univariable models. With `+` sign I mark these covariates which are significant
+in Wald test at the level of 20%.  Note: I deliberately omit `chanceRating` as it is subjective measure, which beyond any doubt depends heavily on other potential covariates as `dist`, `angle`, `defPressure`.
+```{r, include = TRUE, echo = TRUE}
+summary(glm(goal ~ type, family = 'binomial', data = chances_train)) #+
+summary(glm(goal ~ bodyPart, family = 'binomial', data = chances_train)) #+
+summary(glm(goal ~ shotQuality, family = 'binomial', data = chances_train)) #+
+summary(glm(goal ~ defPressure, family = 'binomial', data = chances_train)) #+
+summary(glm(goal ~ numDefPlayers, family = 'binomial', data = chances_train)) #+
+summary(glm(goal ~ numAttPlayers, family = 'binomial', data = chances_train)) #+
+```
+
+```{r, include = TRUE, echo = TRUE}
+chances_train %>% group_by(numAttPlayers) %>% count()
+```
+
+Statistical insignificance of coefficients associated with levels: 5, 6, 7 could be driven by
+a small counts of these levels. Let's try to group them as one level.
+
+```{r, include = TRUE}
+chances_train <- chances_train %>% 
+  mutate(numAttPlayers2 = fct_collapse(numAttPlayers, '>4' = c('5', '6', '7')))
+summary(glm(goal ~ numAttPlayers2, family = 'binomial', data = chances_train)) #+
+```
+
+The p-value of Wald test decreased to 0.14 after grouping the variable, so it's probably better to leave this levels as a group.
+
+```{r, include = TRUE}
+chances_train <- chances_train %>% mutate(numAttPlayers = numAttPlayers2) %>% select(-numAttPlayers2)
+```
+```{r, include = TRUE, echo = TRUE}
+summary(glm(goal ~ dist, family = 'binomial', data = chances_train)) #+
+summary(glm(goal ~ angle, family = 'binomial', data = chances_train)) #+
+summary(glm(goal ~ game_state, family = 'binomial', data = chances_train)) #+
+summary(glm(goal ~ type_of_attack, family = 'binomial', data = chances_train)) #+
+```
+
+Let's try to group chances after corners to see if we can get one level with competitive p-value.
+
+```{r, include = TRUE, echo = TRUE}
+chances_train <- chances_train %>% 
+  mutate(type_of_attack2 = fct_collapse(type_of_attack, 
+                                        'Corner' = c('Foot_Corner', 'Head_Corner', 'Other_Corner')
+  ))
+summary(glm(goal ~ type_of_attack2, family = 'binomial', data = chances_train)) #+
+```
+
+Grouping shots taken after corners resulted in comparable p-value in Wald test, so we keep these
+chances as one type_of_attack in order to slightly simplify a model. What about chances after free-kicks (excl. direct free kicks)?
+
+```{r, include = TRUE, echo = TRUE}
+chances_train <- chances_train %>% 
+  mutate(type_of_attack3 = fct_collapse(type_of_attack2,
+                                        'Free Kick' = c('Foot_Free Kick', 'Head_Free Kick', 
+                                                        'Other_Free Kick')))
+summary(glm(goal ~ type_of_attack3, family = 'binomial', data = chances_train)) #+
+```
+
+Also grouping chances after free kicks (excluding direct free kicks) seems to be reasonable as it
+results in simpler model and fairly low p-value of Wald test.
+
+```{r, include = TRUE}
+chances_train <- chances_train %>% 
+  mutate(type_of_attack = type_of_attack3) %>% 
+  select(-type_of_attack2, -type_of_attack3)
+
+chances_test <- chances_test %>% mutate(type_of_attack = fct_collapse(type_of_attack, 
+                                        'Corner' = c('Foot_Corner', 'Head_Corner', 'Other_Corner'),
+                                        'Free Kick' = c('Foot_Free Kick', 'Head_Free Kick', 
+                                                        'Other_Free Kick')))
+```
+
+### Step 2. 
+In the second step we build a model with all variables selected in step 1. Then we check which covariates are insignificant and if removing them will make a difference.
+
+```{r, include = TRUE, echo = TRUE}
+model2 <- glm(goal ~ shotQuality + defPressure + numDefPlayers +
+              numAttPlayers + dist + angle + game_state + type_of_attack, 
+              family = 'binomial', data = chances_train)
+summary(model2)
+```
+
+numAttPlayers is a variable without at least one significant level coefficient. So let's see how removing it will impact the model.
+
+```{r, include = TRUE, echo = TRUE}
+model2a <- glm(goal ~ shotQuality + defPressure + numDefPlayers + dist + angle +
+                 game_state + type_of_attack, family = 'binomial', data = chances_train)
+summary(model2a)
+lrtest(model2a, model2)
+```
+
+P-value is large, so we can go for simple model. 
+```{r, include = TRUE}
+model2_fin <- model2a
+```
+
+### Step 3. 
+Let's check how much the coefficients changed after removing numAttPlayers:
+```{r, include = TRUE, echo = TRUE}
+(model2_fin$coefficients - model2$coefficients[names(model2_fin$coefficients)])/
+  model2$coefficients[names(model2_fin$coefficients)] * 100
+```
+
+Only in one case (coefficient associated with level 2 of `defPressure`) there has been significant change (26%). I think it is acceptable and therefore I don't include back `numAttPlayers`.
+
+```{r, include = TRUE}
+model3_fin <- model2_fin
+```
+
+### Step 4. 
+Now it is a time when we should check if continuous variables (dist, angle) are linear in the logit.
+To do so, we will use a loess function which fits a linear regression (Y~X) line locally,
+to the data around X = x.
+```{r, include = TRUE, fig.align = "center"}
+logit_loess <- function(x, y, span){
+  
+  logit <- function(p) log(p/(1-p))
+
+  loess_fit <- predict(loess(y ~ x, span = span))
+  pi <- pmax(pmin(loess_fit,0.9999),0.0001)
+  logit_fitted <- logit(pi)
+  
+  plt <- ggplot() + geom_point(aes(x, logit_fitted)) + scale_y_continuous(name = 'log-odds')
+  return(plt)
+}
+
+logit_loess(chances_train$dist, chances_train$goal, span = 0.1)
+logit_loess(chances_train$dist, chances_train$goal, span = 0.2)
+logit_loess(chances_train$dist, chances_train$goal, span = 0.4)
+```
+
+Span of 0.4 seems to be far too large as it is over a half of whole dist range (which is approx. 0.6). Span of 0.1 makes the loess plot quite erratic. So it seems reasonable to go for span 0.2 here as it
+provides adequate smoothness. The plot is quite linear in the middle, but not in the tails. I think especially left tail is crucial here, as the non-linear trend begins when the observations are still close-ranked. If not linear, what's the relationship then? Here restricted cubic splines comes in help.
+
+We test splines with 3, 4, 5 knots as according to literature these are sufficient in most of cases. 
+```{r, include = TRUE}
+spline_dist3 <- glm(goal ~ rcs(dist, parms = 3), family = 'binomial', data = chances_train)
+spline_dist4 <- glm(goal ~ rcs(dist, parms = 4), family = 'binomial', data = chances_train)
+spline_dist5 <- glm(goal ~ rcs(dist, parms = 5), family = 'binomial', data = chances_train)
+```
+
+```{r, include = TRUE, echo = TRUE}
+summary(spline_dist3)$aic
+summary(spline_dist4)$aic
+summary(spline_dist5)$aic
+```
+
+Spline with the lowest AIC is the one with 5 knots.
+
+We'll apply similar procedure to `angle`.
+```{r, include = TRUE, fig.align = 'center'}
+logit_loess(chances_train$angle, chances_train$goal, span = 0.1)
+logit_loess(chances_train$angle, chances_train$goal, span = 0.2)
+logit_loess(chances_train$angle, chances_train$goal, span = 0.4)
+```
+
+Well, this is quite complex, even with the span of 0.4 so we'll try splines with more knots.
+
+```{r, include = TRUE}
+spline_angle3 <- glm(goal ~ rcs(angle, parms = 3), family = 'binomial', data = chances_train)
+spline_angle4 <- glm(goal ~ rcs(angle, parms = 4), family = 'binomial', data = chances_train)
+spline_angle5 <- glm(goal ~ rcs(angle, parms = 5), family = 'binomial', data = chances_train)
+spline_angle6 <- glm(goal ~ rcs(angle, parms = 6), family = 'binomial', data = chances_train)
+spline_angle7 <- glm(goal ~ rcs(angle, parms = 7), family = 'binomial', data = chances_train)
+```
+```{r, include = TRUE, echo = TRUE}
+summary(spline_angle3)$aic
+summary(spline_angle4)$aic
+summary(spline_angle5)$aic
+summary(spline_angle6)$aic
+summary(spline_angle7)$aic
+```
+
+This time we pick the spline with 6 knots as it results in lowest AIC.
+
+So let's replace `dist` and `angle` variables with the fitted splines.
+```{r, include = TRUE, echo = TRUE}
+model4 <- glm(goal ~ shotQuality + defPressure + numDefPlayers + rcs(dist, parms = 5)  + 
+                      rcs(angle, parms = 6) + game_state + type_of_attack, 
+              family = 'binomial', data = chances_train)
+summary(model4)
+```
+
+All coefficients associated with angle spline are statistically insignificant. But what if we decide to remove this covariate?
+
+```{r, include = TRUE, echo = 2:3}
+model4a <- glm(goal ~ shotQuality + defPressure + numDefPlayers + rcs(dist, parms = 5) + game_state +                      type_of_attack, family = 'binomial', data = chances_train)
+lrtest(model4a, model4)
+(model4a$coefficients - model4$coefficients[names(model4a$coefficients)])/
+  model4$coefficients[names(model4a$coefficients)] * 100
+```
+
+Likelihood ratio test suggests that's clearly not a good idea. Also percentage changes imply that an angle spline provides a needed adjustments to other covariates, so we should probably leave it in a model.
+
+Finally let's test the model performance.
+```{r, include = TRUE, echo = TRUE, warning = FALSE}
+ROC(form = goal ~ shotQuality + defPressure + numDefPlayers + rcs(dist, parms = 5)  + 
+                  rcs(angle, parms = 6) + game_state + type_of_attack, 
+    family = 'binomial', data = chances_test, plot = 'ROC')
+```
+
+AUC = 95% is really high. I had been quite sceptic at the beginning, so I altered test sets and the AUC didn't change much. Also McFadden ratio with the score of 0.55 is satisfying.
+
+```{r, include = TRUE, echo = TRUE}
+1 - logLik(model4)/logLik(glm(goal~1, data = chances_train, family = 'binomial'))
+```
+
+Although classifying the `goal` variable isn't out objective here, let's make use of it and calculate 
+RMSE.
+```{r, include = TRUE, echo = TRUE}
+chances_test <- chances_test %>% 
+  mutate(xG = predict(model4, type = 'response', newdata = chances_test))
+
+rmse <- function(x, y) sqrt(mean((x - y)^2))
+rmse_all <- map(1:100, ~ chances_test %>% 
+                  transmute(!! paste0("pred", .x) := as.numeric(xG > 0.01 * .x))) %>% 
+  bind_cols(.) %>% map_dbl(rmse, y = chances_test$goal)
+ggplot() + geom_line(aes(seq(0.01, 1, by = 0.01), rmse_all))
+rmse_all[which.min(rmse_all)]
+```
+
+*pitch_plot is a slightly modified version of a function shared by \@FC_rstats.*
+
+**This article was written with the aid of StrataData, which is property of [Stratagem Technologies](www.stratagem.co). StrataData powers the [StrataBet Sports Trading Platform](https://app.stratabet.com), in addition to [StrataBet Premium Recommendations](https://stratatips.co).**
