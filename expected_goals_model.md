@@ -1490,7 +1490,7 @@ ROC(form = goal ~ defPressure + numDefPlayers + rcs(dist, parms = 5)  +
 
 ![](expected_goals_model_files/figure-markdown_github/unnamed-chunk-53-1.png)
 
-AUC = 79% is really high. I had been quite sceptic at the beginning, so I altered test sets and the AUC didn't change much. Also McFadden ratio with the score of 0.2 is quite satisfying.
+AUC = 79% is rather high. Also McFadden ratio with the score of 0.2 is quite satisfying.
 
 ``` r
 1 - logLik(model4)/logLik(glm(goal~1, data = chances_train, family = 'binomial'))
