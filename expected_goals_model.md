@@ -1490,7 +1490,7 @@ ROC(form = goal ~ defPressure + numDefPlayers + rcs(dist, parms = 5)  +
 
 ![](expected_goals_model_files/figure-markdown_github/unnamed-chunk-53-1.png)
 
-AUC = 79% is rather high. Also McFadden ratio with the score of 0.2 is quite satisfying.
+AUC = 79% is rather high. Also McFadden ratio with the score of 0.2 is quite satisfying. Both are comparable to the fit measures scores of those established models assesed [here](http://business-analytic.co.uk/blog/evaluating-expected-goals-models/). Caveat: those models use data provided by Opta, not StrataBet data.
 
 ``` r
 1 - logLik(model4)/logLik(glm(goal~1, data = chances_train, family = 'binomial'))
