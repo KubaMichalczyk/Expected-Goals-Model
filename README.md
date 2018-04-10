@@ -5,4 +5,4 @@
 
 Open __expected_goals_model.md__ to see a description of my modelling proccess.
 
-* For those who came here from outside from a football analytics community: Expected goals is a method of estimating quality of a chance that a football team creates. It assigns a probability of a shot being a goal given the features of this shot (ex. location, whether proceeded by set piece/open play etc.).
+\* For those who came here from outside from a football analytics community: Expected goals is a method of estimating quality of a chance that a football team creates. It assigns a probability of a shot being a goal given the features of this shot (ex. location, whether proceeded by set piece/open play etc.).
